@@ -66,6 +66,7 @@ create table public.products (
   category_id uuid not null references public.categories(id),
   supplier_id uuid not null references public.suppliers(id),
   warehouse_id uuid references public.warehouses(id),
+  supplier_sku text,
   cost numeric not null check (cost >= 0),
   cost_includes_igv boolean not null default false,
   final_price numeric,
@@ -80,12 +81,16 @@ create table public.products (
   updated_at timestamptz not null default now()
 );
 comment on column public.products.confidence is 'needs_review = viene de un PDF/foto de baja calidad y requiere validación humana antes de publicarse.';
+comment on column public.products.supplier_sku is 'Código/SKU interno del proveedor tal como aparece en su portal. Usado por los scripts de sincronización web para hacer upsert idempotente. Nulo en productos cargados por PDF/foto.';
 
 create index idx_products_category on public.products (category_id);
 create index idx_products_supplier on public.products (supplier_id);
 create index idx_products_brand on public.products (brand);
 create index idx_products_model_trgm on public.products using gin (model gin_trgm_ops);
 create index idx_products_part_number_trgm on public.products using gin (part_number gin_trgm_ops);
+create unique index products_supplier_sku_key
+  on public.products (supplier_id, supplier_sku)
+  where supplier_sku is not null;
 
 -- =========================================================
 -- sync_log
