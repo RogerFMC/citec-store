@@ -54,7 +54,7 @@ Para cada uno:
 
 ## 5. En pausa / fuera de alcance por ahora
 
-- **Ingram Micro Perú**: no automatizar todavía. Roger quiere esperar a que confirmen si ofrecen API/feed propio antes de considerar scraping (su portal es una SPA que requeriría Playwright con login manual inicial — ver notas en `sync_ingrammicro.skeleton.js`).
+- **Ingram Micro Perú**: descartado del proyecto (decisión de Roger, 13/08/2026). Ingram Micro confirmó que no ofrecen API/feed propio. Se evaluó automatizar por scraping de todas formas, pero su portal (`pe.ingrammicro.com`) resultó ser una SPA de React con protección activa Akamai Bot Manager detectada en vivo — el riesgo de que la automatización quede bloqueada, incluso en el script de producción y no solo en la exploración, hizo que Roger decidiera no construir este sync. `sync_ingrammicro.skeleton.js` queda como referencia histórica del patrón de sync, no se retoma.
 - **Intcomex**: proveedor registrado en `suppliers` pero sin productos cargados. No hay lista ni acceso todavía.
 - **Carrito, checkout y pasarela de pago (Niubiz/Culqi)**: Fase 5, no ahora.
 
