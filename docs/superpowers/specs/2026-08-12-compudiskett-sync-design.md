@@ -124,6 +124,42 @@ movimiento real del proveedor, mismo criterio que `suppliers.sync_frequency`).
 No hay test end-to-end contra el sitio real en CI; la validación contra el
 sitio real se hace manualmente antes de programar la GitHub Action.
 
+## Validación en producción (2026-08-13) y hallazgos post-implementación
+
+Primera corrida real contra `ecommerce.compudiskett.com.pe` con la
+`service_role key` real, hecha por Roger tras el merge. Resultado final:
+`status: 'success'`, `items_synced: 1117`, distribuidos en 6 de las 7
+categorías mapeadas (Suministros 614, Impresoras 176, Accesorios y
+periféricos 118, Monitores 104, Tarjetas de video 100, Estabilizadores y
+UPS 5).
+
+Dos bugs reales encontrados y corregidos a partir de esta corrida (el
+fixture de pruebas, con solo 2 tarjetas de una categoría, no los había
+expuesto):
+
+1. **Selector de precio incompleto.** El badge de precio cambia de color
+   según el producto: `alert-danger` (Procesadores, la mayoría de
+   Suministros) vs `alert-info` (el resto — Tarjetas de video,
+   Estabilizadores/ENERGIA, Laptops/NOTEBOOK, etc.). El código original solo
+   buscaba `alert-danger`, por lo que la primera corrida sincronizó solo 228
+   productos con 2172 tarjetas omitidas. Corregido: el selector real y
+   estable es la clase `text-decoration-line-through`, presente en ambas
+   variantes de color.
+2. **Categorías vacías reportadas como error.** Cuando una subcategoría del
+   sitio no tiene resultados, no hay footer de paginación — el sitio muestra
+   en su lugar `"No tenemos información de su búsqueda."`. Antes esto se
+   interpretaba como fallo de parseo y se reportaba como "búsqueda fallida".
+   Ahora se detecta explícitamente y se trata como 0 resultados (no es un
+   error).
+
+**Limitación conocida, no es un bug: `Laptops y PCs` queda en cero.** Las
+tarjetas de `EQUIPOS INFORMATICOS/NOTEBOOK` y `MINI DESKTOP` no muestran
+precio en absoluto para visitantes sin cuenta (cero apariciones de `$` en el
+HTML de esas categorías) — a diferencia del resto del catálogo, que sí es
+público. No hay nada que scrapear sin autenticarse. Roger decidió (13/08/2026)
+dejar esta categoría en cero por ahora en vez de agregar login al sync; se
+retoma si CIACITEC obtiene/usa una cuenta mayorista de Compudiskett.
+
 ## Fuera de alcance de este spec
 
 - Deltron: se replica el mismo patrón después de validar Compudiskett en
