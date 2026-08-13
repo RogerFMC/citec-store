@@ -3,3 +3,5 @@ node_modules/
 .env.local
 *.log
 .claude/settings.local.json
+.worktrees/
+.superpowers/
