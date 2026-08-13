@@ -72,11 +72,14 @@ Compudiskett en tecnología, pero con dos diferencias grandes:
 - **No hay un patrón separable de modelo/número de parte** al final de la
   descripción (a diferencia de Compudiskett). Se guarda la descripción
   completa como `model` y `part_number` queda siempre `null` para Deltron.
-- **`PREC DISTRIB US $` sí usa coma como separador de miles** en precios de
-  4+ cifras (verificado: `1,766.00`, `6,999.00`, `9,999.00` aparecen reales
-  en el archivo) — mismo riesgo que el bug crítico ya encontrado en
-  Compudiskett. El parser debe quitar comas antes de `parseFloat` desde el
-  primer commit, no como fix posterior.
+- **`PREC DISTRIB US $` es un campo CSV numérico propio, sin coma de
+  miles** — a diferencia de Compudiskett (donde el precio vivía dentro de
+  texto HTML y sí necesitaba limpieza). Verificación inicial de esto dio un
+  falso positivo (`1,766.00` resultó ser `STOCK=1` seguido de
+  `PRECIO=766.00`, dos columnas CSV distintas, no un precio con coma);
+  se confirmó buscando precios *entre comillas* con coma de miles
+  (`"1,766.00"`) y no hay ninguno en el archivo real. Precios reales llegan
+  hasta ~$17,638.90 sin necesidad de manejo especial de comas.
 - **Valor centinela `9999999.99`** aparece en 14 filas del archivo actual —
   significa "sin precio fijo, requiere cotización" (ej. garantías
   extendidas, servicios de housing). Estas filas se omiten (mismo
@@ -151,9 +154,8 @@ deltronCategoryMap.js       -- tabla de mapeo (ver arriba)
 3. Parsear el archivo en bloques: cada bloque empieza en una fila
    separadora + fila de encabezado (que trae el nombre de categoría), y
    contiene N filas de datos hasta el siguiente separador.
-4. Por cada fila de datos: si el precio (quitando comas de miles antes de
-   `parseFloat`) es exactamente `9999999.99`, se omite (sin precio real,
-   requiere cotización) y se cuenta. Si la categoría del bloque mapea a una
+4. Por cada fila de datos: si el precio es exactamente `9999999.99`, se
+   omite (sin precio real, requiere cotización) y se cuenta. Si la categoría del bloque mapea a una
    de las 7 categorías existentes: mapear a fila de `products` (`model` =
    descripción completa, `part_number: null`, `brand` = columna MARCA,
    `category_id`, `supplier_id`, `supplier_sku` = columna CODIGO,
