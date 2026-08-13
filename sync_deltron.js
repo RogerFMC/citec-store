@@ -37,10 +37,11 @@ function buildProductRow(row, { categoryId, supplierId, tcm, pricesIncludeIgv })
   };
 }
 
-async function run({ supabaseClient, credentials } = {}) {
+async function run({ supabaseClient, credentials, fetchPriceList: fetchPriceListFn } = {}) {
   const supabase = supabaseClient || getSupabaseClient();
   const username = credentials?.username ?? process.env.DELTRON_USERNAME;
   const password = credentials?.password ?? process.env.DELTRON_PASSWORD;
+  const doFetchPriceList = fetchPriceListFn || fetchPriceList;
 
   const { data: supplier, error: supplierError } = await supabase
     .from('suppliers')
@@ -55,9 +56,19 @@ async function run({ supabaseClient, credentials } = {}) {
     const categoryIdByName = await getCategoryIdMap(supabase);
     const categoryLookup = buildCategoryLookup(CATEGORY_MAP);
 
-    const csvText = await fetchPriceList({ username, password });
+    const csvText = await doFetchPriceList({ username, password });
     const tcm = parseTipoCambio(csvText);
-    const { rows, skippedNoPrice } = parsePriceListRows(csvText);
+    const { rows, skippedNoPrice, skippedMalformed } = parsePriceListRows(csvText);
+
+    // Este sync trae el catálogo completo en una sola petición (a diferencia
+    // de Compudiskett, que hace muchas peticiones independientes por
+    // categoría y puede reportar fallas parciales). Si no se parseó
+    // absolutamente nada -- ni filas útiles ni omisiones contadas -- es
+    // señal fuerte de que Deltron cambió el formato del archivo, y no debe
+    // reportarse como un éxito silencioso de 0 items.
+    if (rows.length === 0 && skippedNoPrice === 0 && skippedMalformed === 0) {
+      throw new Error('Formato de la lista de precios de Deltron no reconocido: 0 filas procesadas.');
+    }
 
     const productRows = [];
     let skippedCategories = 0;
@@ -95,6 +106,9 @@ async function run({ supabaseClient, credentials } = {}) {
     }
     if (skippedNoPrice > 0) {
       messageParts.push(`${skippedNoPrice} fila(s) sin precio fijo (cotización o dato inválido), omitidas.`);
+    }
+    if (skippedMalformed > 0) {
+      messageParts.push(`${skippedMalformed} fila(s) con precio en formato inesperado, omitidas.`);
     }
 
     await logSyncFinish(supabase, logId, {
