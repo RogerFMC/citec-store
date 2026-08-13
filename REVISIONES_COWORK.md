@@ -1,0 +1,47 @@
+# Revisiones de Cowork sobre el trabajo de Claude Code — Citec Store
+
+Log de auditorías (diarias a las 8pm y puntuales cuando Roger lo pide) del avance de Claude Code en este repo y en el proyecto Supabase `citec-store`. Escrito para que Claude Code lo lea al empezar el día.
+
+## Revisión 2026-08-13 10:45 (hora local) — puntual, pedida por Roger
+
+**Commits revisados:** todos, hasta `2791f02` ("Documentar validación en producción del sync de Compudiskett"). Incluye toda la serie de Compudiskett: `f62413f` mapeo de categorías, `936cf75` parsers TCM/paginación/split modelo-SKU, `f941494` parser de tarjetas (cheerio + fixture real), `f4ec82c`/`4cf0e0b` cliente HTTP, `4df1903` helpers de sync/sync_log, `d918968` orquestador, `84b35cd` fix orden de logging, `1fcb021` GitHub Action programada, `dd848af`/`36c6009`/`61547cb`/`9d589db`/`293a802` fixes post-validación (parsing de comas, guard de paginación, Node 22, selector de precio), `2791f02` documentación de la corrida real.
+
+**Estado de sync_log:** 3 corridas hoy contra el sitio real de Compudiskett: `failed` (14:38, "fetch failed"), `partial` (15:13, 228 items, 4 categorías con error de paginación), `success` (15:22, **1117 items sincronizados en 6/7 categorías**: Suministros 614, Impresoras 176, Accesorios y periféricos 118, Monitores 104, Tarjetas de video 100, Estabilizadores y UPS 5). La iteración entre corridas fallidas y la exitosa está documentada en el commit `2791f02` con los dos bugs reales que se encontraron y corrigieron.
+
+**Confirmación clave (lo que pidió Roger verificar):** el origen de datos SÍ es la lista de precios real del proveedor — el sync le pega en vivo a `ecommerce.compudiskett.com.pe`, parsea el HTML real del catálogo público, y los dos bugs corregidos (selector de precio `alert-info` vs `alert-danger`, categorías vacías mal reportadas) solo pudieron encontrarse probando contra el sitio real, no contra el fixture de test. No es data de ejemplo ni inventada.
+
+**Verificación del motor de precios:** spot-check de un producto sincronizado (BOTELLA TINTA EPSON T49H100 NEGRO, categoría Suministros 15%): cost=23.34 (sin IGV) → 23.34×1.18=27.54 → ×1.15=31.67 → +5 cargo fijo = 36.67, coincide exacto con `final_price` en la base de datos. El trigger `compute_final_price()` sigue siendo el único que calcula el precio final; el script de sync solo escribe `cost`/`cost_includes_igv`/`category_id`/`supplier_id`, tal como se pidió.
+
+**Hallazgos:**
+
+1. **Duplicación real en el catálogo de Compudiskett.** Los 790 productos cargados manualmente antes de que existiera el sync (sin `supplier_sku`) siguen en la tabla junto a los 1117 productos nuevos del sync (con `supplier_sku`). Al menos 328 coinciden exactamente por nombre de producto — es decir, al menos 328 productos aparecen HOY DOS VECES en el catálogo (una vez con el precio/costo viejo, otra con el precio de hoy). El índice único `products_supplier_sku_key (supplier_id, supplier_sku)` que se agregó SÍ va a evitar que esto empeore en las próximas corridas (el upsert funciona correctamente para filas que ya tienen `supplier_sku`), pero no reconcilia retroactivamente las 790 filas viejas, porque Postgres permite múltiples `NULL` en un índice único.
+2. **Working tree del repo con cambios sin commitear** al momento de la revisión: 14 archivos con diffs de solo fin de línea (LF→CRLF), sin cambios de lógica reales — típico de checkout en Windows. No es un problema de código, pero conviene no dejarlo así indefinidamente (o se configura `.gitattributes`, o se descarta con `git checkout -- .`).
+3. **Sin confirmar:** si los secrets `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` ya están configurados en GitHub (Settings → Secrets) para que la GitHub Action programada corra sola cada 5 horas. La corrida exitosa de hoy tiene toda la pinta de haberse ejecutado en local, no confirmado que la Action ya haya corrido en GitHub.
+
+**Instrucciones para Claude Code:**
+
+1. Decidir y ejecutar la reconciliación de los 790 productos viejos de Compudiskett sin `supplier_sku` contra los 1117 nuevos: lo más simple es desactivar (`is_active = false`) las filas viejas de Compudiskett que no tengan `supplier_sku`, ya que el sync nuevo es la fuente más confiable y completa (cubre 6 de 7 categorías reales del sitio). Antes de borrar/desactivar, confirmar con Roger si prefiere desactivar en vez de borrar (por trazabilidad).
+2. Confirmar en GitHub (Settings → Secrets and variables → Actions) que `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` están cargados, y forzar una corrida manual (`workflow_dispatch`) para confirmar que la Action corre sola end-to-end, no solo en local.
+3. Limpiar o commitear los cambios de fin de línea pendientes en el working tree (ideal: agregar `.gitattributes` con `* text=auto eol=lf` para que no vuelva a pasar).
+4. Nada más bloquea seguir con Deltron (siguiente proveedor piloto) una vez resuelto el punto 1.
+
+**Estado general:** el sync de Compudiskett funciona, usa datos reales del proveedor, y el motor de precios sigue intacto. El único pendiente real antes de confiar en este catálogo para un buscador público es la reconciliación de duplicados del punto 1.
+
+**Actualización 2026-08-13 10:55 — punto 1 resuelto por Cowork (a pedido de Roger):** antes de desactivar, se confirmó que las 5 categorías del lote viejo sin `supplier_sku` (Suministros 597, Monitores 79, Impresoras 61, Accesorios y periféricos 34, Tarjetas de video 19 — suman los 790) están TODAS cubiertas por el sync nuevo, así que no había riesgo de perder cobertura. Se ejecutó `UPDATE products SET is_active = false` sobre esos 790 (no se borraron, por trazabilidad). Estado final: Compudiskett = 1,117 activos (los del sync) + 790 inactivos (el lote viejo, fuera de `catalog_search`). Puntos 2, 3 y 4 de las instrucciones (confirmar secrets de GitHub Actions, ordenar cambios de fin de línea, seguir con Deltron) siguen pendientes para Claude Code.
+
+## Entrada 2026-08-13, Claude Code — sync de Deltron (lista de precios)
+
+**Commits:** serie completa de Deltron, mergeada a `main`: `9dd3cdf` mapeo de categorías (233 categorías internas de Deltron → 7 de Citec Store), `3e7a1f7` parsers de tipo de cambio/stock, `ecff06c` parser de filas CSV (`csv-parse`, con fix para un bug real de comillas mal formadas en el encabezado del archivo de Deltron), `556e90b` cliente HTTP con autenticación Basic (usuario = RUC `20491767678`), `1522e56` orquestador, `8462fec` GitHub Action programada (`30 */5 * * *`, offset de 30 min respecto a la de Compudiskett para no competir por el mismo minuto), `1869ed6` fix de 4 hallazgos Importantes de la revisión final de rama (precio con coma de miles mal parseado, éxito silencioso con 0 filas, comilla suelta en descripción tumbando todo el parseo, falta de test end-to-end de `run()`). Diseño completo en `docs/superpowers/specs/2026-08-13-deltron-sync-design.md` y `docs/superpowers/plans/2026-08-13-deltron-sync-plan.md`. 60/60 tests unitarios pasando (fixture sintético, nunca el CSV real de Deltron — es información propietaria, no se commitea).
+
+**A diferencia de Compudiskett, este sync usa un origen de datos distinto:** Deltron no requirió scraping de HTML — ofrecen un export CSV de lista de precios completo (`GET listaprodnw.php`, autenticado con HTTP Basic Auth), que trae stock real por producto (algo que Compudiskett no tenía) y sí incluye precios de laptops/notebooks (que la vista web pública de Compudiskett no muestra).
+
+**Estado real en producción — IMPORTANTE, a diferencia de Compudiskett esto NO está validado en vivo todavía:**
+- `sync_log` para Deltron: **0 filas**. El script nunca corrió contra el sitio/base de datos real — a diferencia de Compudiskett, que sí se validó con corridas reales (incluyendo dos bugs que solo se encontraron probando en vivo).
+- `products` de Deltron activos: **347, todos sin `supplier_sku`** (el lote viejo cargado manualmente por Cowork antes de que existiera este sync — Laptops y PCs 166, Monitores 91, Estabilizadores y UPS 52, Tarjetas de video 38). Cero productos nuevos del sync todavía.
+- La verificación manual pendiente (correr `node sync_deltron.js` con las credenciales reales y revisar `sync_log`/`products`) quedó interrumpida cuando la conversación pasó a evaluar Ingram Micro — no se retomó.
+
+**Riesgo esperado, ya anticipado:** cuando el sync corra por primera vez, es muy probable que se repita el mismo patrón de duplicación que pasó con Compudiskett (productos viejos sin `supplier_sku` coincidiendo por nombre con los nuevos que sí lo tienen) — el índice único `products_supplier_sku_key` evita que empeore hacia adelante, pero no reconcilia retroactivamente. Cuando se corra el sync real, conviene repetir el mismo chequeo de duplicados que se hizo para Compudiskett antes de confiar en el catálogo combinado.
+
+**Pendientes heredados de la revisión anterior, sin cambios:** no se confirmó si `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` están en GitHub Secrets (y ahora tampoco `DELTRON_USERNAME`/`DELTRON_PASSWORD`, nuevos para este sync); no se agregó `.gitattributes` (el working tree está limpio de diffs de fin de línea en este momento, pero el punto de fondo — que puede volver a pasar en Windows — sigue sin resolverse estructuralmente).
+
+**Decisión de alcance tomada en esta sesión:** Ingram Micro se descartó completamente del proyecto (no solo pausado) — confirmaron que no tienen API, y su portal resultó tener protección Akamai Bot Manager activa. Detalle en `INSTRUCCIONES_CLAUDE_CODE.md` sección 5.
