@@ -68,11 +68,15 @@ Compudiskett en tecnología, pero con dos diferencias grandes:
 
 ### Formato del CSV (verificado contra un export real)
 
-- **Codificación: Latin-1 / Windows-1252, no UTF-8** (confirmado
-  byte a byte: `Ñ` se codifica como `0xD1`, que corrompe a un carácter
-  inválido si se decodifica como UTF-8 — ej. "IMPRESION_CORTE_DISEÑO" se ve
-  como "IMPRESION_CORTE_DISE�O"). El parser debe decodificar explícitamente
-  como `latin1`.
+- **Codificación: UTF-8** (corregido 2026-08-13 ~22:30 — se había asumido
+  Latin-1/Windows-1252 originalmente, incorrecto: verificado con 457
+  secuencias reales de 2 bytes UTF-8 en el archivo, ej. los bytes de
+  "término" decodificados como Latin-1 dan el mojibake "tÃ©rmino" que
+  aparecía en ~183 de 928 productos activos antes del fix. `readLocalPriceList`
+  en `lib/deltronClient.js` decodifica como `utf8`. `fetchPriceList` — el
+  mecanismo HTTP alterno, nunca usado en producción porque no llegó a
+  descargar el CSV real — sigue asumiendo Latin-1 sin verificar, documentado
+  como tal en el código.
 - Encabezado del archivo con metadata global: título, fecha de generación,
   almacenes incluidos (`'PRINCIPAL-CORPAC','CHICLAYO','TRUJILLO'`), y
   `TIPO DE CAMBIO :3.380` — mismo criterio que Compudiskett: se usa el TCM
@@ -193,8 +197,8 @@ data/deltron/                -- carpeta (fuera de git) donde vive lista_precios.
 ```
 
 `readLocalPriceList(filePath)` lee el archivo del disco y lo decodifica
-como `latin1`, igual que haría una respuesta HTTP real — el resto del
-pipeline (parseo, mapeo, upsert) no distingue de dónde vino el texto.
+como `utf8` (corregido 2026-08-13, ver "Formato del CSV" arriba) — el resto
+del pipeline (parseo, mapeo, upsert) no distingue de dónde vino el texto.
 
 ## Flujo de datos
 

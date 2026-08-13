@@ -10,7 +10,7 @@ function loadFixture() {
   const buffer = fs.readFileSync(
     path.join(__dirname, 'test', 'fixtures', 'deltron_price_list_sample.csv')
   );
-  return buffer.toString('latin1');
+  return buffer.toString('utf8');
 }
 
 // Fake de Supabase compartido entre los tests end-to-end de run(): captura
