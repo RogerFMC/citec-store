@@ -88,9 +88,15 @@ create index idx_products_supplier on public.products (supplier_id);
 create index idx_products_brand on public.products (brand);
 create index idx_products_model_trgm on public.products using gin (model gin_trgm_ops);
 create index idx_products_part_number_trgm on public.products using gin (part_number gin_trgm_ops);
+-- Índice único simple (no parcial): Postgres ya permite múltiples NULL en
+-- supplier_sku sin chocar (NULL nunca es igual a NULL), así que los
+-- productos cargados por PDF/foto conviven sin problema. Se deja simple a
+-- propósito para que sirva de target directo de ON CONFLICT (supplier_id,
+-- supplier_sku) en los upsert de los scripts de sync — un índice parcial
+-- con WHERE no sirve como target de ON CONFLICT salvo que la query repita
+-- exactamente el mismo WHERE, y el upsert() de supabase-js no lo hace.
 create unique index products_supplier_sku_key
-  on public.products (supplier_id, supplier_sku)
-  where supplier_sku is not null;
+  on public.products (supplier_id, supplier_sku);
 
 -- =========================================================
 -- sync_log

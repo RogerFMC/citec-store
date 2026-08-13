@@ -46,10 +46,15 @@ La portada muestra un tipo de cambio publicado por el propio proveedor
    proveedor mismo aplica ese día y no depende de una fuente externa
    adicional para un sync recurrente.
 3. **Clave de upsert**: se agrega `products.supplier_sku` (código interno del
-   proveedor) con índice único parcial `(supplier_id, supplier_sku) where
-   supplier_sku is not null` — ya aplicado en Supabase (migración
-   `add_supplier_sku_for_sync_upsert`, 2026-08-12). Nulo para productos
-   cargados por PDF/foto, que no tienen este dato.
+   proveedor) con índice único simple `(supplier_id, supplier_sku)` — ya
+   aplicado en Supabase (migraciones `add_supplier_sku_for_sync_upsert` y
+   `fix_supplier_sku_index_to_non_partial_for_upsert`, 2026-08-12). No se usó
+   un índice parcial (`where supplier_sku is not null`): Postgres ya permite
+   múltiples `NULL` en una columna única sin chocar entre sí, así que los
+   productos cargados por PDF/foto (sin este dato) conviven sin problema, y
+   un índice simple sí sirve como target directo de `ON CONFLICT` para el
+   `upsert()` de supabase-js — uno parcial no, salvo que la consulta repita
+   el mismo `WHERE`, cosa que supabase-js no hace.
 4. **Categorías sin mapeo**: el sitio vende productos en categorías que no
    existen en `categories` (Procesadores, Placas Madre, RAM, Gabinetes,
    Almacenamiento). El piloto sincroniza solo lo que mapea a una categoría
