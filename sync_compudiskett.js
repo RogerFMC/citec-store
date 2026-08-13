@@ -6,6 +6,7 @@ const {
   parsePageInfo,
   parseProductCards,
   splitModelAndPartNumber,
+  isEmptyResultPage,
 } = require('./lib/parseCompudiskettCatalog');
 const { CATEGORY_MAP } = require('./compudiskettCategoryMap');
 const { round2 } = require('./pricingEngine');
@@ -30,6 +31,9 @@ async function fetchAllCardsForKey(session, buscarKey) {
 
   do {
     const html = await session.fetchCategoryPage(buscarKey);
+    if (isEmptyResultPage(html)) {
+      return { cards: allCards, skipped };
+    }
     const info = parsePageInfo(html);
     currentPage = info.currentPage;
     totalPages = info.totalPages;

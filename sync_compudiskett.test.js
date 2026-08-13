@@ -35,9 +35,9 @@ test('fetchAllCardsForKey junta las tarjetas de todas las páginas', async () =>
       calls.fetchCategoryPage.push(key);
       const page = calls.setPage.length; // página actual tras el último setPage
       if (page <= 1) {
-        return '<span id="pag_rig">Página 1 -  2 de 4 Resultados </span><div class="card p-1"><a onclick="busqueda_general(\'bus_rapida\', \' \', \' \', \'SKU-A\')"></a><div class="card-title"><span class="text-dark">MARCA</span></div><div class="card-title"><span class="fw-medium">PRODUCTO A</span></div><div class="alert-danger">$10.00</div></div>';
+        return '<span id="pag_rig">Página 1 -  2 de 4 Resultados </span><div class="card p-1"><a onclick="busqueda_general(\'bus_rapida\', \' \', \' \', \'SKU-A\')"></a><div class="card-title"><span class="text-dark">MARCA</span></div><div class="card-title"><span class="fw-medium">PRODUCTO A</span></div><div class="alert-danger text-decoration-line-through">$10.00</div></div>';
       }
-      return '<span id="pag_rig">Página 2 -  2 de 4 Resultados </span><div class="card p-1"><a onclick="busqueda_general(\'bus_rapida\', \' \', \' \', \'SKU-B\')"></a><div class="card-title"><span class="text-dark">MARCA</span></div><div class="card-title"><span class="fw-medium">PRODUCTO B</span></div><div class="alert-danger">$20.00</div></div>';
+      return '<span id="pag_rig">Página 2 -  2 de 4 Resultados </span><div class="card p-1"><a onclick="busqueda_general(\'bus_rapida\', \' \', \' \', \'SKU-B\')"></a><div class="card-title"><span class="text-dark">MARCA</span></div><div class="card-title"><span class="fw-medium">PRODUCTO B</span></div><div class="alert-info text-decoration-line-through">$20.00</div></div>';
     },
   };
 
@@ -47,6 +47,17 @@ test('fetchAllCardsForKey junta las tarjetas de todas las páginas', async () =>
   assert.equal(cards[0].supplierSku, 'SKU-A');
   assert.equal(cards[1].supplierSku, 'SKU-B');
   assert.deepEqual(calls.setPage, [1, 2]);
+});
+
+test('fetchAllCardsForKey devuelve 0 tarjetas sin lanzar cuando la categoría está vacía', async () => {
+  const fakeSession = {
+    setPage: async () => {},
+    fetchCategoryPage: async () =>
+      '<div class="alert alert-info text-center fs-3 mt-8" role="alert">No tenemos información de su búsqueda.</div>',
+  };
+
+  const { cards, skipped } = await fetchAllCardsForKey(fakeSession, ' EQUIPOS INFORMATICOS/DESKTOP  ');
+  assert.deepEqual({ cards, skipped }, { cards: [], skipped: 0 });
 });
 
 test('fetchAllCardsForKey lanza error si la paginación no avanza', async () => {
@@ -74,7 +85,7 @@ test('run: si un buscarKey falla no descarta las filas de las demás y el log qu
     `<div class="card p-1"><a onclick="busqueda_general('bus_rapida', ' ', ' ', '${sku}')"></a>` +
     `<div class="card-title"><span class="text-dark">MARCA</span></div>` +
     `<div class="card-title"><span class="fw-medium">${name}</span></div>` +
-    `<div class="alert-danger">$${price}</div></div>`;
+    `<div class="alert-danger text-decoration-line-through">$${price}</div></div>`;
 
   const categoryNames = Object.keys(originalCategoryMap);
   const goodCategoryName = categoryNames[0];
