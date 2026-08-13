@@ -117,11 +117,22 @@ Compudiskett en tecnología, pero con dos diferencias grandes:
   se confirmó buscando precios *entre comillas* con coma de miles
   (`"1,766.00"`) y no hay ninguno en el archivo real. Precios reales llegan
   hasta ~$17,638.90 sin necesidad de manejo especial de comas.
-- **Valor centinela `9999999.99`** aparece en 14 filas del archivo actual —
-  significa "sin precio fijo, requiere cotización" (ej. garantías
-  extendidas, servicios de housing). Estas filas se omiten (mismo
-  tratamiento que una tarjeta sin precio parseable en Compudiskett): se
-  cuentan, no se sincronizan.
+- **Valores centinela "todo nueves"**: además de `9999999.99` (14 filas),
+  se encontraron en producción otras 4 magnitudes del mismo patrón —
+  `9999.00` (4 filas), `999.00` (52 filas), `99.00` (10 filas) y `9.00`
+  (6 filas) — descubiertas post-sync (2026-08-13, ~18:00) al notar 3
+  productos sin relación entre sí (teclado gamer, monitor, mochila)
+  compartiendo el mismo `cost` calculado. Se confirmó revisando cada grupo:
+  en todos aparecen productos completamente distintos (impresora
+  multifuncional junto a polos y bufandas en `9.00`; pack de garantía
+  extendida junto a bolsas y cuadernos promocionales en `99.00`; cargador,
+  audífonos gamer, parlantes, maletín, case de PC, estabilizador y licencia
+  Kaspersky en `999.00`) — la única explicación consistente es que las 5
+  magnitudes son el mismo mecanismo de "sin precio fijo, requiere
+  cotización" a distintas escalas, no coincidencia de precio real. Estas
+  filas se omiten (mismo tratamiento que una tarjeta sin precio parseable
+  en Compudiskett): se cuentan, no se sincronizan. Ver
+  `PRICE_SENTINELS_NO_PRICE` en `lib/parseDeltronPriceList.js`.
 
 ## Decisiones confirmadas con Roger
 
@@ -195,8 +206,9 @@ pipeline (parseo, mapeo, upsert) no distingue de dónde vino el texto.
 3. Parsear el archivo en bloques: cada bloque empieza en una fila
    separadora + fila de encabezado (que trae el nombre de categoría), y
    contiene N filas de datos hasta el siguiente separador.
-4. Por cada fila de datos: si el precio es exactamente `9999999.99`, se
-   omite (sin precio real, requiere cotización) y se cuenta. Si la categoría del bloque mapea a una
+4. Por cada fila de datos: si el precio coincide con alguno de los 5
+   valores centinela (`9.00`, `99.00`, `999.00`, `9999.00`, `9999999.99`),
+   se omite (sin precio real, requiere cotización) y se cuenta. Si la categoría del bloque mapea a una
    de las 7 categorías existentes: mapear a fila de `products` (`model` =
    descripción completa, `part_number: null`, `brand` = columna MARCA,
    `category_id`, `supplier_id`, `supplier_sku` = columna CODIGO,
