@@ -1,7 +1,44 @@
 # Sincronizador de Deltron
 
 Fecha: 2026-08-13
-Estado: aprobado por Roger, pendiente de implementación
+Estado: implementado y en uso — mecanismo de obtención del archivo pivoteado
+post-implementación (ver "Corrección post-implementación" más abajo).
+
+## Corrección post-implementación (2026-08-13, ~22:00)
+
+**La sección "Investigación" de abajo describe la hipótesis original, que
+resultó ser incorrecta en un punto clave: `GET listaprodnw.php` con Basic
+Auth NO devuelve el CSV.** Se implementó igual (commits hasta `556e90b`),
+se corrió contra producción, y falló. Investigación en vivo (ver
+`REVISIONES_COWORK.md`, entradas ~21:45-22:00) confirmó:
+
+- `GET listaprodnw.php` con `Authorization: Basic` devuelve `200 OK`, pero
+  el cuerpo son 9771 caracteres de una página HTML — el formulario "Lista
+  de Precios y Stock" (checkboxes de almacén + botones de formato), no el
+  CSV real de ~322KB.
+- El botón "CSV" de ese formulario dispara, vía JavaScript, un `POST` a un
+  endpoint distinto (`listaprecios.php?tipo=csv&rand=<valor>`). Se intentó
+  reproducir ese POST con varias variantes (cookie, `Referer`, `rand`
+  fresco tomado de una carga real del formulario) — todas devolvieron
+  `200 OK` con **0 bytes**, sin causa identificada.
+- `Basic Auth` evita el `401` de `/login.php`, pero el sitio depende de una
+  sesión de aplicación real (cookies `deltronlogin`/`razsoc`/`grupo`/
+  `cartera`, que el servidor siempre devuelve marcadas como `deleted` en
+  estos intentos) que no se logró reproducir con peticiones HTTP sueltas.
+
+**Decisión de Roger (2026-08-13):** no invertir en automatización más
+pesada (Playwright reproduciendo el flujo de navegador completo) por
+ahora. El sync pasa a leer el CSV desde un **archivo local**
+(`data/deltron/lista_precios.csv`, fuera de git) que alguien descarga a
+mano del portal cada cierto tiempo — mismo dato, origen distinto. El
+parser, el mapeo de categorías y el orquestador (todo lo documentado más
+abajo en este spec, salvo la sección de obtención del archivo) siguen
+siendo válidos sin cambios; ver "Arquitectura" y "Flujo de datos"
+actualizados para el mecanismo real vigente.
+
+`lib/deltronClient.js` conserva `fetchPriceList` (HTTP Basic Auth) como
+mecanismo documentado pero no usado por defecto — queda ahí por si en el
+futuro se resuelve la sesión de aplicación o se invierte en Playwright.
 
 ## Contexto
 
@@ -137,19 +174,23 @@ Mismo patrón de archivos que Compudiskett, reutilizando `lib/syncCommon.js`
 y `pricingEngine.js` sin cambios:
 
 ```
-sync_deltron.js            -- orquestador: fetch CSV, parsear, mapear, upsert, loggear
-lib/deltronClient.js        -- GET con HTTP Basic Auth (sin sesión/cookies)
+sync_deltron.js              -- orquestador: leer CSV local, parsear, mapear, upsert, loggear
+lib/deltronClient.js         -- readLocalPriceList (mecanismo real) + fetchPriceList (alterno, no usado por defecto)
 lib/parseDeltronPriceList.js -- parseo del CSV en bloques (texto puro, sin cheerio)
-deltronCategoryMap.js       -- tabla de mapeo (ver arriba)
+deltronCategoryMap.js        -- tabla de mapeo (ver arriba)
+data/deltron/                -- carpeta (fuera de git) donde vive lista_precios.csv
 ```
 
-`lib/deltronClient.js` es más simple que su equivalente de Compudiskett: un
-único `GET` con header `Authorization: Basic ...`, sin `setPage`/paginación.
+`readLocalPriceList(filePath)` lee el archivo del disco y lo decodifica
+como `latin1`, igual que haría una respuesta HTTP real — el resto del
+pipeline (parseo, mapeo, upsert) no distingue de dónde vino el texto.
 
 ## Flujo de datos
 
-1. `GET listaprodnw.php` con Basic Auth → texto crudo, decodificado como
-   `latin1`.
+1. Leer `data/deltron/lista_precios.csv` (ruta overrideable con
+   `DELTRON_PRICE_LIST_PATH`) → texto crudo, decodificado como `latin1`.
+   Alguien lo descargó a mano del portal de Deltron y lo dejó ahí — ver
+   `data/deltron/README.md` para el paso a paso.
 2. Extraer `TIPO DE CAMBIO` del encabezado del archivo.
 3. Parsear el archivo en bloques: cada bloque empieza en una fila
    separadora + fila de encabezado (que trae el nombre de categoría), y
@@ -172,12 +213,20 @@ deltronCategoryMap.js       -- tabla de mapeo (ver arriba)
 ## Manejo de errores y logging
 
 Mismo contrato que Compudiskett: `sync_log` se abre apenas se conoce
-`supplier_id` (antes de cualquier llamada que pueda fallar, incluyendo el
-fetch del CSV) y se cierra con `status`/`items_synced`/`message`. Un fallo
-de autenticación (401) o de red en el `GET` del CSV completo hace que toda
-la corrida falle (`status: 'failed'`) — a diferencia de Compudiskett, aquí
-no hay "búsquedas" individuales por categoría que puedan fallar
-independientemente, porque todo viene en un solo archivo.
+`supplier_id` (antes de cualquier llamada que pueda fallar, incluyendo la
+lectura del CSV) y se cierra con `status`/`items_synced`/`message`. Si el
+archivo local no existe (nadie lo descargó todavía, o la ruta está mal)
+`readLocalPriceList` lanza un error claro, que igual que cualquier otro
+fallo hace que toda la corrida falle (`status: 'failed'`) — a diferencia de
+Compudiskett, aquí no hay "búsquedas" individuales por categoría que puedan
+fallar independientemente, porque todo viene en un solo archivo.
+
+**GitHub Action:** sin `schedule` por ahora (solo `workflow_dispatch`) — el
+archivo local no existe en el runner de GitHub Actions, así que ni siquiera
+un disparo manual funcionaría hoy sin un paso adicional que lo suba/traiga
+desde algún lado (ej. Supabase Storage). No se implementó ese paso porque
+no hacía falta para el flujo manual actual (correr `node sync_deltron.js`
+en la máquina de quien descargó el archivo).
 
 ## Testing
 

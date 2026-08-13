@@ -6,3 +6,4 @@ node_modules/
 .worktrees/
 .superpowers/
 tmp/
+data/deltron/*.csv

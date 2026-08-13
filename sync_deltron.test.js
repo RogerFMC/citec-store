@@ -72,14 +72,14 @@ test('run: abre sync_log antes de traer el CSV, upsertea products sin final_pric
   const callOrder = [];
   const { supabase, upsertedChunks, getFinishArgs } = makeFakeSupabase({ callOrder });
 
-  const fakeFetchPriceList = async () => {
-    callOrder.push('fetch_price_list');
+  const fakeGetCsvText = async () => {
+    callOrder.push('get_csv_text');
     return loadFixture();
   };
 
-  await run({ supabaseClient: supabase, fetchPriceList: fakeFetchPriceList, credentials: { username: 'u', password: 'p' } });
+  await run({ supabaseClient: supabase, getCsvText: fakeGetCsvText });
 
-  assert.deepEqual(callOrder, ['sync_log_insert', 'fetch_price_list']);
+  assert.deepEqual(callOrder, ['sync_log_insert', 'get_csv_text']);
 
   const allUpserted = upsertedChunks.flat();
   assert.ok(allUpserted.length > 0, 'debe upsertear al menos una fila');
@@ -106,16 +106,27 @@ test('run: un CSV sin filas de datos reconocibles se loguea como "failed", no co
   // parsear.
   const garbageCsv =
     ',"TIPO DE CAMBIO :3.380"\n"_______________","_______________","__________________________________","__________"\n';
-  const fakeFetchPriceList = async () => garbageCsv;
+  const fakeGetCsvText = async () => garbageCsv;
 
   await assert.rejects(
-    () => run({ supabaseClient: supabase, fetchPriceList: fakeFetchPriceList, credentials: { username: 'u', password: 'p' } }),
+    () => run({ supabaseClient: supabase, getCsvText: fakeGetCsvText }),
     /0 filas procesadas/
   );
 
   const finishArgs = getFinishArgs();
   assert.equal(finishArgs.status, 'failed');
   assert.equal(finishArgs.items_synced, 0);
+});
+
+test('run: sin getCsvText inyectado, lee el archivo real de csvFilePath (readLocalPriceList real)', async () => {
+  const callOrder = [];
+  const { supabase, upsertedChunks } = makeFakeSupabase({ callOrder });
+  const fixturePath = path.join(__dirname, 'test', 'fixtures', 'deltron_price_list_sample.csv');
+
+  await run({ supabaseClient: supabase, csvFilePath: fixturePath });
+
+  const allUpserted = upsertedChunks.flat();
+  assert.equal(allUpserted.length, 2, 'debe leer y procesar el fixture real desde disco, sin fakes de CSV');
 });
 
 test('buildCategoryLookup invierte el mapa: categoría de Deltron -> nuestra categoría', () => {

@@ -1,6 +1,7 @@
 'use strict';
 
-const { fetchPriceList } = require('./lib/deltronClient');
+const path = require('node:path');
+const { readLocalPriceList } = require('./lib/deltronClient');
 const { parseTipoCambio, parsePriceListRows } = require('./lib/parseDeltronPriceList');
 const { CATEGORY_MAP } = require('./deltronCategoryMap');
 const { round2 } = require('./pricingEngine');
@@ -8,6 +9,14 @@ const { getSupabaseClient, getCategoryIdMap, logSyncStart, logSyncFinish } = req
 
 const SUPPLIER_NAME = 'Deltron';
 const UPSERT_CHUNK_SIZE = 500;
+// Deltron no ofrece descarga automatizada confiable (decisión de Roger,
+// 2026-08-13: no invertir en Playwright por ahora — ver
+// docs/superpowers/specs/2026-08-13-deltron-sync-design.md). El mecanismo
+// real es que alguien descargue el CSV a mano del portal (botón CSV de
+// "Lista de Precios y Stock") y lo deje en esta ruta fija, sobrescribiendo
+// el archivo anterior. Ruta overrideable con DELTRON_PRICE_LIST_PATH (útil
+// para pruebas manuales sin tocar el archivo por defecto).
+const DEFAULT_PRICE_LIST_PATH = path.join(__dirname, 'data', 'deltron', 'lista_precios.csv');
 
 function buildCategoryLookup(categoryMap) {
   const lookup = new Map();
@@ -37,11 +46,10 @@ function buildProductRow(row, { categoryId, supplierId, tcm, pricesIncludeIgv })
   };
 }
 
-async function run({ supabaseClient, credentials, fetchPriceList: fetchPriceListFn } = {}) {
+async function run({ supabaseClient, csvFilePath, getCsvText } = {}) {
   const supabase = supabaseClient || getSupabaseClient();
-  const username = credentials?.username ?? process.env.DELTRON_USERNAME;
-  const password = credentials?.password ?? process.env.DELTRON_PASSWORD;
-  const doFetchPriceList = fetchPriceListFn || fetchPriceList;
+  const filePath = csvFilePath || process.env.DELTRON_PRICE_LIST_PATH || DEFAULT_PRICE_LIST_PATH;
+  const doGetCsvText = getCsvText || (() => readLocalPriceList(filePath));
 
   const { data: supplier, error: supplierError } = await supabase
     .from('suppliers')
@@ -56,7 +64,7 @@ async function run({ supabaseClient, credentials, fetchPriceList: fetchPriceList
     const categoryIdByName = await getCategoryIdMap(supabase);
     const categoryLookup = buildCategoryLookup(CATEGORY_MAP);
 
-    const csvText = await doFetchPriceList({ username, password });
+    const csvText = await doGetCsvText();
     const tcm = parseTipoCambio(csvText);
     const { rows, skippedNoPrice, skippedMalformed } = parsePriceListRows(csvText);
 

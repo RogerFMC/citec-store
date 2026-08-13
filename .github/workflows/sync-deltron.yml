@@ -1,9 +1,19 @@
 # .github/workflows/sync-deltron.yml
+#
+# Sin schedule por ahora: Deltron no tiene descarga automatizada confiable
+# (decisión de Roger, 2026-08-13 — ver
+# docs/superpowers/specs/2026-08-13-deltron-sync-design.md). El sync lee el
+# CSV desde un archivo local (data/deltron/lista_precios.csv) que alguien
+# descarga a mano del portal cada cierto tiempo — ese archivo no existe en
+# el runner de GitHub Actions, así que incluso disparado a mano
+# (workflow_dispatch) esta Action fallaría hoy con "No se encontró el
+# archivo...". Queda como workflow_dispatch únicamente para cuando exista un
+# paso que suba/descargue el CSV al runner (ej. Supabase Storage) antes de
+# correr el sync — no se implementó todavía porque no era necesario para el
+# flujo manual actual.
 name: Sync Deltron
 
 on:
-  schedule:
-    - cron: '30 */5 * * *'
   workflow_dispatch: {}
 
 jobs:
@@ -20,5 +30,3 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          DELTRON_USERNAME: ${{ secrets.DELTRON_USERNAME }}
-          DELTRON_PASSWORD: ${{ secrets.DELTRON_PASSWORD }}
