@@ -60,11 +60,12 @@ async function run() {
     .single();
   if (supplierError) throw supplierError;
 
-  const categoryIdByName = await getCategoryIdMap(supabase);
   const logId = await logSyncStart(supabase, supplier.id);
   const session = new CompudiskettSession();
 
   try {
+    const categoryIdByName = await getCategoryIdMap(supabase);
+
     const tcmRaw = await session.fetchTipoCambio();
     const tcm = parseTipoCambio(tcmRaw);
 
