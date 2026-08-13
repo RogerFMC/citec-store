@@ -1,0 +1,24 @@
+# .github/workflows/sync-deltron.yml
+name: Sync Deltron
+
+on:
+  schedule:
+    - cron: '30 */5 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: node sync_deltron.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DELTRON_USERNAME: ${{ secrets.DELTRON_USERNAME }}
+          DELTRON_PASSWORD: ${{ secrets.DELTRON_PASSWORD }}
