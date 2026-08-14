@@ -3,6 +3,8 @@ import { buildProductSlug } from '../lib/slug.js';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://citec-store.vercel.app';
 
+export const revalidate = 3600;
+
 export default async function sitemap() {
   const categories = await getCategories();
   const products = await getAllProductsForSitemap();
