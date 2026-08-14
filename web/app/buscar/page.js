@@ -22,6 +22,17 @@ export default async function SearchPage({ searchParams }) {
   return (
     <main className="container">
       <h1>Resultados para &ldquo;{query}&rdquo;</h1>
+      <form action="/buscar" method="get" className="search-form">
+        <input
+          type="text"
+          name="q"
+          defaultValue={query}
+          placeholder="Buscar por modelo, marca o número de parte..."
+          aria-label="Buscar productos"
+          required
+        />
+        <button type="submit">Buscar</button>
+      </form>
       <p>
         {total} producto{total === 1 ? '' : 's'} encontrado{total === 1 ? '' : 's'}
       </p>
