@@ -172,7 +172,7 @@ git commit -m "feat: agregar categories.slug y catalog_search.category_slug"
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test lib/*.test.js"
+    "test": "node --test lib"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
