@@ -117,7 +117,10 @@ test('getProductsByCategory filtra por category_slug y pagina con range correcto
 });
 
 test('getProductsByCategory por defecto pide la página 1', async () => {
-  const supabase = makeFakeSupabase({ data: [{ id: '1' }], error: null, count: 5 });
+  // count alto a propósito (200 -> 9 páginas): con un total chico el clamp a
+  // totalPages podía dar página 1 sin importar cuál fuera el default real,
+  // dejando de probar lo que el nombre del test dice.
+  const supabase = makeFakeSupabase({ data: [{ id: '1' }], error: null, count: 200 });
   const result = await getProductsByCategory({ slug: 'monitores', supabaseClient: supabase });
   assert.equal(result.page, 1);
   const rangeCall = supabase.lastQuery._calls.find(([name]) => name === 'range');
