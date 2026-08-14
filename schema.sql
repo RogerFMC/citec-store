@@ -11,6 +11,7 @@ create extension if not exists pg_trgm;
 create table public.categories (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  slug text not null unique,
   margin_pct numeric not null check (margin_pct >= 0 and margin_pct <= 100),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -183,7 +184,8 @@ select
   w.city as warehouse_city,
   w.max_lead_days,
   p.last_synced_at,
-  p.confidence
+  p.confidence,
+  c.slug as category_slug
 from public.products p
 join public.categories c on c.id = p.category_id
 left join public.warehouses w on w.id = p.warehouse_id

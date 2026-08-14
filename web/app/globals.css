@@ -1,0 +1,179 @@
+:root {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --color-muted: #6b7280;
+  --color-accent: #0f766e;
+  --color-border: #e5e7eb;
+  --max-width: 1100px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.site-header a.brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.hero {
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.search-form {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 500px;
+  margin: 1.5rem auto 0;
+}
+
+.search-form input {
+  flex: 1;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.search-form button {
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.category-grid, .product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.category-card, .product-card {
+  display: block;
+  padding: 1.25rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.category-card {
+  text-align: center;
+  font-weight: 600;
+}
+
+.category-card:hover, .product-card:hover {
+  border-color: var(--color-accent);
+}
+
+.product-card .product-name {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.product-card .product-price {
+  color: var(--color-accent);
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.product-card .product-stock {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.pagination {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 2rem;
+  justify-content: center;
+}
+
+.pagination a, .pagination span {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.pagination .current {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+.product-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 600px;
+}
+
+.product-detail .price {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.whatsapp-button {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.85rem 1.5rem;
+  background: #25d366;
+  color: white;
+  border-radius: 6px;
+  font-weight: 700;
+  text-align: center;
+  width: fit-content;
+}
+
+.empty-state {
+  padding: 3rem 0;
+  text-align: center;
+  color: var(--color-muted);
+}
