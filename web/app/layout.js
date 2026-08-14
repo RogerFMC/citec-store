@@ -1,13 +1,21 @@
 import Link from 'next/link';
 import './globals.css';
 
+const DEFAULT_TITLE = 'Citec Store';
+const DEFAULT_DESCRIPTION =
+  'Catálogo de tecnología — laptops, impresoras, monitores y más, con precios y stock actualizados.';
+
 export const metadata = {
   title: {
-    default: 'Citec Store',
+    default: DEFAULT_TITLE,
     template: '%s',
   },
-  description:
-    'Catálogo de tecnología — laptops, impresoras, monitores y más, con precios y stock actualizados.',
+  description: DEFAULT_DESCRIPTION,
+  openGraph: {
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    type: 'website',
+  },
 };
 
 export default function RootLayout({ children }) {

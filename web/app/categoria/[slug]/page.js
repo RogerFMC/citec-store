@@ -16,9 +16,12 @@ export async function generateMetadata({ params }) {
   const categories = await getCategories();
   const category = categories.find((c) => c.slug === slug);
   if (!category) return {};
+  const title = `${category.name} | Citec Store`;
+  const description = `Catálogo de ${category.name} en Citec Store: precios actualizados, stock y plazo de entrega.`;
   return {
-    title: `${category.name} | Citec Store`,
-    description: `Catálogo de ${category.name} en Citec Store: precios actualizados, stock y plazo de entrega.`,
+    title,
+    description,
+    openGraph: { title, description, type: 'website' },
   };
 }
 
