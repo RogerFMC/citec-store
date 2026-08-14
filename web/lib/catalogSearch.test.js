@@ -80,6 +80,32 @@ test('getCategories lanza si Supabase devuelve error', async () => {
   await assert.rejects(() => getCategories({ supabaseClient: supabase }), /boom/);
 });
 
+test('getCategories pagina más allá de 1000 filas y no pierde categorías que caen después del primer chunk', async () => {
+  let call = 0;
+  const pages = [
+    Array.from({ length: 1000 }, () => ({
+      category: 'Accesorios y periféricos',
+      category_slug: 'accesorios-y-perifericos',
+    })),
+    Array.from({ length: 1000 }, () => ({ category: 'Monitores', category_slug: 'monitores' })),
+    Array.from({ length: 300 }, () => ({ category: 'Suministros', category_slug: 'suministros' })),
+  ];
+  const supabase = {
+    from() {
+      const data = pages[call];
+      call += 1;
+      return makeFakeQuery({ data, error: null });
+    },
+  };
+  const categories = await getCategories({ supabaseClient: supabase });
+  assert.equal(call, 3);
+  assert.deepEqual(categories, [
+    { name: 'Accesorios y periféricos', slug: 'accesorios-y-perifericos' },
+    { name: 'Monitores', slug: 'monitores' },
+    { name: 'Suministros', slug: 'suministros' },
+  ]);
+});
+
 test('getProductsByCategory filtra por category_slug y pagina con range correcto', async () => {
   const supabase = makeFakeSupabase({ data: [{ id: '1' }], error: null, count: 30 });
   const result = await getProductsByCategory({ slug: 'monitores', page: 2, supabaseClient: supabase });
