@@ -15,11 +15,14 @@ export async function generateMetadata({ params }) {
   const product = await getProductById(id);
   if (!product) return {};
 
+  const title = `${product.model} | Citec Store`;
+  const description = `${product.model}${product.brand ? ' — ' + product.brand : ''} — ${formatPrice(
+    product.final_price
+  )}. ${stockLabel(product.stock_status)} en Citec Store.`;
   return {
-    title: `${product.model} | Citec Store`,
-    description: `${product.model}${product.brand ? ' — ' + product.brand : ''} — ${formatPrice(
-      product.final_price
-    )}. ${stockLabel(product.stock_status)} en Citec Store.`,
+    title,
+    description,
+    openGraph: { title, description, type: 'website' },
   };
 }
 
@@ -54,7 +57,10 @@ export default async function ProductPage({ params }) {
 
   return (
     <main className="container">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+      />
       <div className="product-detail">
         <h1>{product.model}</h1>
         {product.brand && <p>Marca: {product.brand}</p>}
