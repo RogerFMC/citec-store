@@ -2,6 +2,7 @@ node_modules/
 .env
 .env.local
 *.log
+.next/
 .claude/settings.local.json
 .worktrees/
 .superpowers/
