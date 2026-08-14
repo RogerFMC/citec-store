@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test lib"
+    "test": "node --test lib/*.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
