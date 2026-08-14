@@ -1,0 +1,151 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  getCategories,
+  getProductsByCategory,
+  getProductById,
+  searchProducts,
+  getAllProductsForSitemap,
+} from './catalogSearch.js';
+
+function makeFakeQuery(result) {
+  const calls = [];
+  const builder = {
+    select(...args) {
+      calls.push(['select', args]);
+      return builder;
+    },
+    eq(...args) {
+      calls.push(['eq', args]);
+      return builder;
+    },
+    or(...args) {
+      calls.push(['or', args]);
+      return builder;
+    },
+    order(...args) {
+      calls.push(['order', args]);
+      return builder;
+    },
+    range(...args) {
+      calls.push(['range', args]);
+      return builder;
+    },
+    maybeSingle() {
+      calls.push(['maybeSingle', []]);
+      return Promise.resolve(result);
+    },
+    then(resolve, reject) {
+      return Promise.resolve(result).then(resolve, reject);
+    },
+    _calls: calls,
+  };
+  return builder;
+}
+
+function makeFakeSupabase(result) {
+  let lastQuery = null;
+  const fromCalls = [];
+  return {
+    from(table) {
+      fromCalls.push(table);
+      lastQuery = makeFakeQuery(result);
+      return lastQuery;
+    },
+    get lastQuery() {
+      return lastQuery;
+    },
+    _fromCalls: fromCalls,
+  };
+}
+
+test('getCategories deduplica por category_slug y devuelve {name, slug}', async () => {
+  const supabase = makeFakeSupabase({
+    data: [
+      { category: 'Monitores', category_slug: 'monitores' },
+      { category: 'Monitores', category_slug: 'monitores' },
+      { category: 'Impresoras', category_slug: 'impresoras' },
+    ],
+    error: null,
+  });
+  const categories = await getCategories({ supabaseClient: supabase });
+  assert.deepEqual(categories, [
+    { name: 'Monitores', slug: 'monitores' },
+    { name: 'Impresoras', slug: 'impresoras' },
+  ]);
+});
+
+test('getCategories lanza si Supabase devuelve error', async () => {
+  const supabase = makeFakeSupabase({ data: null, error: new Error('boom') });
+  await assert.rejects(() => getCategories({ supabaseClient: supabase }), /boom/);
+});
+
+test('getProductsByCategory filtra por category_slug y pagina con range correcto', async () => {
+  const supabase = makeFakeSupabase({ data: [{ id: '1' }], error: null, count: 30 });
+  const result = await getProductsByCategory({ slug: 'monitores', page: 2, supabaseClient: supabase });
+  assert.deepEqual(result, { products: [{ id: '1' }], total: 30, page: 2, pageSize: 24 });
+  const eqCall = supabase.lastQuery._calls.find(([name]) => name === 'eq');
+  assert.deepEqual(eqCall[1], ['category_slug', 'monitores']);
+  const rangeCall = supabase.lastQuery._calls.find(([name]) => name === 'range');
+  assert.deepEqual(rangeCall[1], [24, 47]);
+});
+
+test('getProductsByCategory por defecto pide la página 1', async () => {
+  const supabase = makeFakeSupabase({ data: [], error: null, count: 0 });
+  const result = await getProductsByCategory({ slug: 'monitores', supabaseClient: supabase });
+  assert.equal(result.page, 1);
+  const rangeCall = supabase.lastQuery._calls.find(([name]) => name === 'range');
+  assert.deepEqual(rangeCall[1], [0, 23]);
+});
+
+test('getProductById devuelve el producto si existe', async () => {
+  const supabase = makeFakeSupabase({ data: { id: 'abc', model: 'Monitor X' }, error: null });
+  const product = await getProductById('abc', { supabaseClient: supabase });
+  assert.deepEqual(product, { id: 'abc', model: 'Monitor X' });
+});
+
+test('getProductById devuelve null si no existe', async () => {
+  const supabase = makeFakeSupabase({ data: null, error: null });
+  const product = await getProductById('id-inexistente', { supabaseClient: supabase });
+  assert.equal(product, null);
+});
+
+test('searchProducts con query vacío devuelve 0 resultados sin llamar a Supabase', async () => {
+  const supabase = makeFakeSupabase({ data: [], error: null, count: 0 });
+  const result = await searchProducts({ query: '   ', page: 1, supabaseClient: supabase });
+  assert.deepEqual(result, { products: [], total: 0, page: 1, pageSize: 24 });
+  assert.equal(supabase._fromCalls.length, 0, 'no debe llamar a Supabase si no hay palabras de búsqueda');
+});
+
+test('searchProducts arma un filtro or() por cada palabra de la búsqueda', async () => {
+  const supabase = makeFakeSupabase({ data: [{ id: '1' }], error: null, count: 1 });
+  await searchProducts({ query: 'monitor lenovo', page: 1, supabaseClient: supabase });
+  const orCalls = supabase.lastQuery._calls.filter(([name]) => name === 'or');
+  assert.equal(orCalls.length, 2);
+  assert.equal(
+    orCalls[0][1][0],
+    'model.ilike.*monitor*,description.ilike.*monitor*,brand.ilike.*monitor*,part_number.ilike.*monitor*'
+  );
+  assert.equal(
+    orCalls[1][1][0],
+    'model.ilike.*lenovo*,description.ilike.*lenovo*,brand.ilike.*lenovo*,part_number.ilike.*lenovo*'
+  );
+});
+
+test('getAllProductsForSitemap junta páginas de 1000 hasta que una vuelve incompleta', async () => {
+  let call = 0;
+  const pages = [
+    Array.from({ length: 1000 }, (_, i) => ({ id: `p${i}` })),
+    Array.from({ length: 300 }, (_, i) => ({ id: `p${1000 + i}` })),
+  ];
+  const supabase = {
+    from() {
+      const data = pages[call];
+      call += 1;
+      return makeFakeQuery({ data, error: null });
+    },
+  };
+  const all = await getAllProductsForSitemap({ supabaseClient: supabase });
+  assert.equal(all.length, 1300);
+  assert.equal(call, 2);
+});
