@@ -112,6 +112,26 @@ Con Compudiskett y Deltron (los 2 proveedores piloto de la Fase 2) validados end
 4. **Arrancar Fase 4 — buscador y frontend:** ya se puede empezar. Recordatorios de `INSTRUCCIONES_CLAUDE_CODE.md` sección 4: el frontend consulta ÚNICAMENTE la vista `catalog_search` (nunca `products` directo — no expone costo ni proveedor); desplegar en el equipo Vercel `CITEC` ya existente (no crear uno nuevo); renderizado indexable por Google desde el principio, no una SPA de buscador interno solamente. Página de inicio con categorías + buscador central (modelo/número de parte/marca/descripción), y página de detalle con precio final, procedencia/almacén, y plazo estimado.
 5. Seguimos con la misma dinámica: Cowork audita cada tarde a las 8pm y ante pedidos puntuales de Roger, deja instrucciones acá.
 
+## Cierre 2026-08-13 ~23:55 — Fase 2 (Compudiskett + Deltron) validada end-to-end
+
+Verificado directamente en la base de datos, no solo por el reporte de Claude Code: nueva corrida de `sync_deltron.js` a las 23:53 UTC (`success`, 928 items), y el conteo de filas con mojibake (`Ã.` en `model`/`brand`) bajó de 183 a **0**. El fix de codificación UTF-8 quedó confirmado.
+
+**Estado de los 2 proveedores piloto de la Fase 2:** ambos con catálogo limpio (sin duplicados activos), motor de precios verificado con spot-checks independientes, y sin pendientes técnicos bloqueantes. Quedan solo housekeeping no urgente (secrets de GitHub para que la Action de Compudiskett corra sola sin intervención manual, purga opcional del historial de git del commit accidental de Deltron).
+
+**Luz verde para arrancar Fase 4** (buscador/frontend, ver instrucciones arriba y en `INSTRUCCIONES_CLAUDE_CODE.md` sección 4). Cowork sigue con la auditoría diaria de las 8pm.
+
+## Revisión de spec 2026-08-13 ~22:35 — `docs/superpowers/specs/2026-08-13-fase4-frontend-design.md`
+
+**Verificado contra la base de datos real:** los números de la tabla de contexto (2,299 productos activos en `catalog_search`, desglose por categoría) coinciden exacto con una consulta directa. Columnas reales de `catalog_search`: `id, model, part_number, brand, description, category, final_price, stock_status, warehouse_name, warehouse_city, max_lead_days, last_synced_at, confidence` — todo lo que la spec asume que existe, existe. Permisos actuales del rol `anon`: **solo `SELECT` sobre `catalog_search`**, nada más (ni `products`, ni `categories`, ni `suppliers`) — el aislamiento actual está bien.
+
+**Hallazgo real, corregir antes del plan de implementación:** la sección "Slugs de categoría" propone agregar `categories.slug` y que el frontend la consulte para resolver rutas `/categoria/[slug]`. Pero `categories` también tiene `margin_pct` (el margen por categoría — dato comercial sensible, nunca expuesto hasta ahora). Si se le da `SELECT` a `anon` sobre `categories` para poder leer `slug`, se expone `margin_pct` al público de paso — rompe el mismo principio que ya protege `products` (nunca costo/proveedor).
+
+**Corrección sugerida:** no dar acceso público a `categories` en absoluto. En vez de eso, agregar `category_slug` directamente a la vista `catalog_search` (join interno a `categories.slug` dentro de la definición de la vista, igual que ya hace con `category`/nombre) — `categories.slug` sigue siendo la fuente de verdad para el dato, pero el frontend nunca deja de tocar solo `catalog_search`, que es la única superficie pública por diseño.
+
+**Resto de la spec: sin objeciones.** Buen manejo de YAGNI (sin filtros, sin scroll infinito, sin RLS nueva más allá de lo anterior), slug de producto resuelto por sufijo de `id` en vez de slug completo (correcto para no romper enlaces indexados si `model` cambia), manejo de errores razonable, WhatsApp como único CTA acordado con Roger.
+
+**Para Claude Code:** corregir la sección de slugs de categoría como se indica arriba, y ya se puede pasar al plan de implementación.
+
 **No se investigó más a fondo por indicación directa de Roger** (pidió parar la exploración por DevTools y confirmar primero con el `console.log` en el script real, ya hecho arriba).
 
 **Pendiente de decidir con Roger:** cómo seguir — (a) invertir en automatización más pesada tipo Playwright para reproducir el flujo de navegador completo (clic real en el botón), con el riesgo/costo que eso implica; (b) adoptar ya el "plan B" de carga manual periódica que Cowork propuso como respaldo, promoviéndolo a camino principal mientras no se resuelva (a); o (c) seguir intentando variantes de la petición HTTP directa un poco más. El código de Deltron ya mergeado a `main` (parser, mapeo de categorías, orquestador) sigue siendo válido independientemente de cuál mecanismo de obtención del archivo se use — solo `lib/deltronClient.js` (la parte que hace el fetch) necesitaría cambiar.
@@ -176,3 +196,7 @@ Verificado independientemente el hallazgo de Cowork (revisión ~22:10): el archi
 - Verificado contra el archivo real: 0 filas con mojibake tras el fix, 355 filas con tildes/ñ correctamente decodificadas (antes corrompidas).
 
 73/73 tests pasando. Spec actualizado. Pendiente: correr `node sync_deltron.js` de nuevo (Roger) para que el upsert por `supplier_sku` corrija las descripciones/marcas de las 928 filas ya sincronizadas — es seguro, no crea duplicados. Después de eso, con el punto 1 de las instrucciones de Cowork resuelto, solo quedan pendientes housekeeping (secrets de GitHub, historial del commit accidental) y arrancar Fase 4.
+
+## Entrada 2026-08-13 ~23:15, Claude Code — corrección de spec aplicada (Fase 4)
+
+Aplicada la corrección de Cowork sobre `docs/superpowers/specs/2026-08-13-fase4-frontend-design.md`: la sección "Slugs de categoría" ya no propone dar `SELECT` a `anon` sobre `categories` (que hubiera expuesto `margin_pct` de paso). En vez de eso, `category_slug` se agrega directamente al `SELECT` de la vista `catalog_search` vía el join interno que ya existe a `categories` (mismo patrón que `c.name AS category`) — verificado contra la definición real de la vista antes de escribir la corrección. `categories.slug` sigue siendo la fuente de verdad; el frontend nunca toca `categories` directamente. Spec corregida y commiteada localmente, pendiente de confirmar el push con Roger.

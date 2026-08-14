@@ -83,8 +83,22 @@ RLS nueva.
 **Slugs de categoría:** se agrega una columna `slug text unique` a
 `categories` (migración chica en Supabase) en vez de duplicar un mapeo
 categoría→slug en el frontend — fuente única de verdad, mismo criterio
-que el resto del proyecto (Supabase como fuente de verdad). Valores
-iniciales (7 filas, generados por slugify del nombre):
+que el resto del proyecto (Supabase como fuente de verdad).
+
+**Corrección de Cowork (revisión de spec, 2026-08-13 ~22:35), aplicada:**
+`categories` también tiene `margin_pct` (margen comercial, dato sensible
+nunca expuesto públicamente). Darle `SELECT` a `anon` sobre `categories`
+para leer `slug` filtraría `margin_pct` de paso — rompería el mismo
+principio que protege `products` (nunca costo/proveedor). En vez de eso:
+**no se otorga ningún permiso nuevo sobre `categories`**; se agrega
+`c.slug AS category_slug` directamente al `SELECT` de la vista
+`catalog_search` (join interno ya existente a `categories`, mismo patrón
+que ya usa para `c.name AS category` — ver definición actual de la
+vista). El frontend sigue sin tocar `categories` en ningún momento;
+`categories.slug` sigue siendo la fuente de verdad del dato, solo que se
+lee a través de la vista pública, no de la tabla.
+
+Valores iniciales de `slug` (7 filas, generados por slugify del nombre):
 
 ```
 Laptops y PCs             -> laptops-y-pcs
