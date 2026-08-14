@@ -1,10 +1,11 @@
+import { cache } from 'react';
 import { getSupabaseClient } from './supabaseClient.js';
 import { buildSearchWords, buildSearchOrFilters } from './searchQuery.js';
 
 const PAGE_SIZE = 24;
 const SEARCH_COLUMNS = ['model', 'description', 'brand', 'part_number'];
 
-export async function getCategories({ supabaseClient } = {}) {
+export const getCategories = cache(async ({ supabaseClient } = {}) => {
   const supabase = supabaseClient || getSupabaseClient();
   const chunkSize = 1000;
   let from = 0;
@@ -29,20 +30,35 @@ export async function getCategories({ supabaseClient } = {}) {
     }
   }
   return [...seen.values()];
-}
+});
 
 export async function getProductsByCategory({ slug, page = 1, supabaseClient } = {}) {
   const supabase = supabaseClient || getSupabaseClient();
-  const from = (page - 1) * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
-  const { data, error, count } = await supabase
+
+  const { count, error: countError } = await supabase
     .from('catalog_search')
-    .select('*', { count: 'exact' })
+    .select('*', { count: 'exact', head: true })
+    .eq('category_slug', slug);
+  if (countError) throw countError;
+
+  const total = count ?? 0;
+  if (total === 0) {
+    return { products: [], total: 0, page, pageSize: PAGE_SIZE };
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(1, page), totalPages);
+  const from = (clampedPage - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  const { data, error } = await supabase
+    .from('catalog_search')
+    .select('*')
     .eq('category_slug', slug)
     .order('model', { ascending: true })
     .range(from, to);
   if (error) throw error;
-  return { products: data, total: count ?? 0, page, pageSize: PAGE_SIZE };
+  return { products: data, total, page: clampedPage, pageSize: PAGE_SIZE };
 }
 
 export async function getProductById(id, { supabaseClient } = {}) {
@@ -59,16 +75,32 @@ export async function searchProducts({ query, page = 1, supabaseClient } = {}) {
   }
 
   const supabase = supabaseClient || getSupabaseClient();
-  const from = (page - 1) * PAGE_SIZE;
+  const filters = buildSearchOrFilters(words, SEARCH_COLUMNS);
+
+  let countBuilder = supabase.from('catalog_search').select('*', { count: 'exact', head: true });
+  for (const filter of filters) {
+    countBuilder = countBuilder.or(filter);
+  }
+  const { count, error: countError } = await countBuilder;
+  if (countError) throw countError;
+
+  const total = count ?? 0;
+  if (total === 0) {
+    return { products: [], total: 0, page, pageSize: PAGE_SIZE };
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(1, page), totalPages);
+  const from = (clampedPage - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  let builder = supabase.from('catalog_search').select('*', { count: 'exact' });
-  for (const filter of buildSearchOrFilters(words, SEARCH_COLUMNS)) {
+  let builder = supabase.from('catalog_search').select('*');
+  for (const filter of filters) {
     builder = builder.or(filter);
   }
-  const { data, error, count } = await builder.order('model', { ascending: true }).range(from, to);
+  const { data, error } = await builder.order('model', { ascending: true }).range(from, to);
   if (error) throw error;
-  return { products: data, total: count ?? 0, page, pageSize: PAGE_SIZE };
+  return { products: data, total, page: clampedPage, pageSize: PAGE_SIZE };
 }
 
 export async function getAllProductsForSitemap({ supabaseClient } = {}) {

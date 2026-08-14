@@ -117,11 +117,44 @@ test('getProductsByCategory filtra por category_slug y pagina con range correcto
 });
 
 test('getProductsByCategory por defecto pide la página 1', async () => {
-  const supabase = makeFakeSupabase({ data: [], error: null, count: 0 });
+  const supabase = makeFakeSupabase({ data: [{ id: '1' }], error: null, count: 5 });
   const result = await getProductsByCategory({ slug: 'monitores', supabaseClient: supabase });
   assert.equal(result.page, 1);
   const rangeCall = supabase.lastQuery._calls.find(([name]) => name === 'range');
   assert.deepEqual(rangeCall[1], [0, 23]);
+});
+
+test('getProductsByCategory con page mucho más allá del total no lanza y limita a la última página', async () => {
+  let call = 0;
+  const responses = [
+    { data: null, error: null, count: 30 }, // query de conteo (head: true)
+    { data: [{ id: 'ultimo' }], error: null, count: 30 }, // query real, ya con page recortada
+  ];
+  const supabase = {
+    from() {
+      const result = responses[call];
+      call += 1;
+      return makeFakeQuery(result);
+    },
+  };
+  const result = await getProductsByCategory({ slug: 'monitores', page: 999, supabaseClient: supabase });
+  assert.equal(call, 2, 'debe hacer una query de conteo y luego la query de la página recortada');
+  assert.equal(result.page, 2, 'ceil(30/24) = 2 páginas; 999 se recorta a la última');
+  assert.deepEqual(result.products, [{ id: 'ultimo' }]);
+  assert.equal(result.total, 30);
+});
+
+test('getProductsByCategory con total 0 no intenta un range() inválido', async () => {
+  let call = 0;
+  const supabase = {
+    from() {
+      call += 1;
+      return makeFakeQuery({ data: null, error: null, count: 0 });
+    },
+  };
+  const result = await getProductsByCategory({ slug: 'categoria-vacia', page: 1, supabaseClient: supabase });
+  assert.equal(call, 1, 'solo debe llamar from() una vez (el conteo); no debe intentar la query de rango');
+  assert.deepEqual(result, { products: [], total: 0, page: 1, pageSize: 24 });
 });
 
 test('getProductById devuelve el producto si existe', async () => {
@@ -156,6 +189,39 @@ test('searchProducts arma un filtro or() por cada palabra de la búsqueda', asyn
     orCalls[1][1][0],
     'model.ilike.*lenovo*,description.ilike.*lenovo*,brand.ilike.*lenovo*,part_number.ilike.*lenovo*'
   );
+});
+
+test('searchProducts con page mucho más allá del total no lanza y limita a la última página', async () => {
+  let call = 0;
+  const responses = [
+    { data: null, error: null, count: 10 }, // query de conteo (head: true)
+    { data: [{ id: 'ultimo' }], error: null, count: 10 }, // query real, ya con page recortada
+  ];
+  const supabase = {
+    from() {
+      const result = responses[call];
+      call += 1;
+      return makeFakeQuery(result);
+    },
+  };
+  const result = await searchProducts({ query: 'monitor', page: 999, supabaseClient: supabase });
+  assert.equal(call, 2, 'debe hacer una query de conteo y luego la query de la página recortada');
+  assert.equal(result.page, 1, 'ceil(10/24) = 1 página; 999 se recorta a la última');
+  assert.deepEqual(result.products, [{ id: 'ultimo' }]);
+  assert.equal(result.total, 10);
+});
+
+test('searchProducts sin resultados (count 0) no intenta un range() inválido', async () => {
+  let call = 0;
+  const supabase = {
+    from() {
+      call += 1;
+      return makeFakeQuery({ data: null, error: null, count: 0 });
+    },
+  };
+  const result = await searchProducts({ query: 'zzzznoexiste', page: 2, supabaseClient: supabase });
+  assert.equal(call, 1, 'solo debe llamar from() una vez (el conteo); no debe intentar la query de rango');
+  assert.deepEqual(result, { products: [], total: 0, page: 2, pageSize: 24 });
 });
 
 test('getAllProductsForSitemap junta páginas de 1000 hasta que una vuelve incompleta', async () => {
